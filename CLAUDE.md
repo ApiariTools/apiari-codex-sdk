@@ -67,6 +67,35 @@ No `send_message()` or `send_tool_result()` — codex handles tool execution int
 - `todo_list` — task list
 - `error` — item-level error
 
+## Execution Model — Key Difference from Claude SDK
+
+**Claude SDK** is bidirectional: you send messages on stdin, receive events on stdout, and can interact mid-turn (send tool results, follow-up messages while the session is running).
+
+**Codex SDK** is single-shot: one prompt in, event stream out, then it's done. There is NO way to send input during an execution.
+
+### How "Chat" Works (Resume-as-Chat Pattern)
+
+To build a conversational UI on top of codex, each user message is a **separate execution** that resumes the previous session:
+
+```
+User message 1  →  exec("do the thing", ExecOptions { .. })
+                   ← stream events until EOF
+                   ← save thread_id from ThreadStarted event
+
+User message 2  →  exec_resume("now fix the tests", ResumeOptions { session_id, .. })
+                   ← stream events until EOF
+
+User message 3  →  exec_resume("looks good, commit it", ResumeOptions { session_id, .. })
+                   ← stream events until EOF
+```
+
+### UI Implications
+
+- **Input must be disabled while an execution is running.** You cannot queue or send messages mid-execution.
+- **interrupt() (SIGINT) can cancel** a running execution, but you can't redirect it — only stop it.
+- **Events stream in real-time** (`item.updated` gives incremental text) — the UI should render them live, not wait for completion.
+- **Hive integration** should abstract this behind `enum AgentBackend { Claude(..), Codex(..) }` at the coordinator level. The coordinator disables input for Codex backends while an execution is in flight, re-enables on EOF.
+
 ## Design Rules
 
 - **Wrap CLI, not API.** This SDK spawns the `codex` binary. It does NOT call the OpenAI API directly.
