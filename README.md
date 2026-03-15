@@ -1,8 +1,13 @@
 # apiari-codex-sdk
 
-Rust SDK for the [OpenAI Codex CLI](https://github.com/openai/codex). Wraps the `codex` binary, reading JSONL events from stdout when invoked with `codex exec --json`.
+**Rust SDK for the [OpenAI Codex CLI](https://github.com/openai/codex) — spawn `codex exec` and stream JSONL events.**
 
-This is **not** a direct API client. It spawns the `codex` CLI as a subprocess. The CLI handles authentication, tool execution, file access, and sandboxing.
+[![Crates.io](https://img.shields.io/crates/v/apiari-codex-sdk)](https://crates.io/crates/apiari-codex-sdk)
+[![docs.rs](https://img.shields.io/docsrs/apiari-codex-sdk)](https://docs.rs/apiari-codex-sdk)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+> Not a direct API client. This crate spawns the `codex` CLI as a subprocess —
+> the CLI handles authentication, tool execution, file access, and sandboxing.
 
 ## Quick Start
 
@@ -40,31 +45,18 @@ async fn main() -> apiari_codex_sdk::Result<()> {
 }
 ```
 
-## Features
-
-- Spawn and stream `codex exec --json` sessions
-- Typed event stream with real-time incremental updates
-- Resume previous sessions for multi-turn chat
-- Full `ExecOptions` covering model, sandbox, approval policy, and more
-- Interrupt (SIGINT) and kill support
-- Forward-compatible parsing — unknown event/item types deserialize as `Unknown`
-
-## Requirements
-
-- The `codex` CLI must be installed and on `$PATH` (or provide a custom path via `CodexClient::with_cli_path`)
-
-## Usage
-
 Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-apiari-codex-sdk.workspace = true
+apiari-codex-sdk = "0.1"
 ```
 
-## Execution Model — Unidirectional Single-Shot
+Requires the `codex` CLI on `$PATH` (or use `CodexClient::with_cli_path`).
 
-The Codex SDK uses a **unidirectional** protocol. Each execution is a single prompt in, event stream out. There is no stdin — it is set to `/dev/null`.
+## Execution Model
+
+The SDK uses a **unidirectional, single-shot** protocol. Each execution is one prompt in, one event stream out. Stdin is `/dev/null`.
 
 ```
 ┌─────────┐    CLI args (prompt)        ┌───────────┐
@@ -75,41 +67,21 @@ The Codex SDK uses a **unidirectional** protocol. Each execution is a single pro
                                         stdin = /dev/null
 ```
 
-### How a Single Execution Works
+**Key properties:**
+
+- **One prompt per execution** — the prompt is a CLI argument, not streamed.
+- **Real-time event streaming** — `ItemUpdated` gives incremental text. Render it live.
+- **No mid-execution input** — you cannot send messages during an execution.
+- **Tool execution is internal** — codex runs commands, edits files, and searches the web on its own. The SDK observes these as `CommandExecution`, `FileChange`, `WebSearch` items.
+- **`interrupt()` cancels** the current execution via SIGINT.
+- **Resume for multi-turn** — save the `thread_id` from `ThreadStarted` and pass it to `exec_resume()`.
+
+### Multi-Turn Chat
+
+Each user message is a separate execution that resumes the previous session:
 
 ```rust
-// 1. Start an execution — prompt goes as a CLI argument
-let mut execution = client.exec("Fix the failing tests", opts).await?;
-
-// 2. Read events as they stream in real-time
-while let Some(event) = execution.next_event().await? {
-    match &event {
-        Event::ThreadStarted { thread_id } => {
-            // Save this for resuming later
-            println!("Thread: {thread_id}");
-        }
-        Event::ItemUpdated { item: Item::Reasoning { text, .. } } => {
-            // Reasoning streams incrementally
-            if let Some(text) = text { print!("{text}"); }
-        }
-        Event::ItemCompleted { item: Item::CommandExecution { command, exit_code, .. } } => {
-            println!("Ran: {} (exit {})", command.as_deref().unwrap_or("?"), exit_code.unwrap_or(-1));
-        }
-        Event::ItemCompleted { item: Item::AgentMessage { text, .. } } => {
-            if let Some(text) = text { println!("{text}"); }
-        }
-        _ => {}
-    }
-}
-// 3. Execution is done — process has exited
-```
-
-### Multi-Turn Chat via Resume
-
-To build a conversational UI, each user message is a **separate execution** that resumes the previous session using the thread ID:
-
-```rust
-// First message — new execution
+// First message
 let mut exec1 = client.exec("Set up a new Rust project", opts).await?;
 let mut thread_id = None;
 while let Some(event) = exec1.next_event().await? {
@@ -119,36 +91,15 @@ while let Some(event) = exec1.next_event().await? {
     // ... handle events ...
 }
 
-// Second message — resumes the same session
-let mut exec2 = client.exec_resume("Now add serde as a dependency", ResumeOptions {
+// Follow-up — resumes the same session
+let mut exec2 = client.exec_resume("Now add serde", ResumeOptions {
     session_id: thread_id,
     full_auto: true,
     ..Default::default()
 }).await?;
-while let Some(event) = exec2.next_event().await? {
-    // ... handle events ...
-}
 ```
 
-Each `exec_resume()` creates a new subprocess that loads the previous session state. The conversation continues where it left off.
-
-### Key Properties
-
-- **One prompt per execution** — the prompt is a CLI argument, not streamed via stdin.
-- **Events stream in real-time** — `item.updated` gives incremental text for reasoning and messages. Render them live.
-- **No mid-execution input** — you cannot send messages or tool results during an execution. Input must be disabled in the UI while codex is working.
-- **Tool execution is internal** — codex runs commands, edits files, and searches the web on its own. The SDK observes these as `CommandExecution`, `FileChange`, `WebSearch` items.
-- **`interrupt()` cancels** the current execution (SIGINT), but you cannot redirect it — only stop it.
-- **Resume for follow-ups** — save the `thread_id` from `ThreadStarted` and pass it to `exec_resume()` for the next message.
-
-### UI Implications
-
-- **Disable input while an execution is running.** There is no way to send messages mid-execution.
-- **Re-enable input when `next_event()` returns `None`** (execution finished).
-- **Render events incrementally** — `item.updated` events carry partial text that grows over time.
-- **Show tool activity** — `CommandExecution`, `FileChange`, `McpToolCall` items let you show what codex is doing.
-
-### Comparison with Claude SDK
+### Codex SDK vs Claude SDK
 
 | | Codex SDK | Claude SDK |
 |---|---|---|
@@ -156,8 +107,7 @@ Each `exec_resume()` creates a new subprocess that loads the previous session st
 | **Session lifetime** | One subprocess per message | One subprocess for entire conversation |
 | **Mid-turn input** | No (stdin is `/dev/null`) | Yes (`send_message`, `send_tool_result`) |
 | **Tool execution** | CLI handles tools internally | SDK receives tool requests, sends results |
-| **Multi-turn chat** | Resume with session ID for each message | Send multiple messages on same session |
-| **Input availability** | Disabled during execution | Always enabled |
+| **Multi-turn chat** | Resume with session ID | Send multiple messages on same session |
 
 ## Event Types
 
@@ -191,12 +141,23 @@ Each `exec_resume()` creates a new subprocess that loads the previous session st
 
 ```
 src/
-  lib.rs          # Module declarations + re-exports
-  client.rs       # CodexClient (factory) + Execution (read-only handle)
+  lib.rs          # Re-exports
+  client.rs       # CodexClient + Execution handle
   options.rs      # ExecOptions, ResumeOptions, SandboxMode, ApprovalPolicy
-  transport.rs    # ReadOnlyTransport (spawn, recv-only, interrupt, kill)
-  types.rs        # Event, Item variants, Usage, supporting types
-  error.rs        # SdkError enum + Result alias
+  transport.rs    # ReadOnlyTransport — spawn, recv, interrupt, kill
+  types.rs        # Event, Item, Usage
+  error.rs        # SdkError + Result alias
 tests/
   integration.rs  # Live CLI tests (#[ignore] by default)
 ```
+
+## Apiari Ecosystem
+
+This crate is part of the [Apiari](https://github.com/ApiariTools) tooling ecosystem:
+
+- **[apiari-codex-sdk](https://github.com/ApiariTools/apiari-codex-sdk)** — Codex CLI SDK (this crate)
+- **[apiari-claude-sdk](https://github.com/ApiariTools/apiari-claude-sdk)** — Claude Code SDK
+
+## License
+
+MIT
