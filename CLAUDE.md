@@ -1,115 +1,31 @@
-# apiari-codex-sdk
+# Worker Profile
 
-Rust SDK wrapping the OpenAI Codex CLI via JSONL stdout streaming.
+## Rules
+1. You are working in a git worktree on a `swarm/*` branch. Never commit to main.
+2. Only modify files within this repository.
+3. When done, create a PR with `gh pr create --reviewer @copilot`.
+4. Do not run `cargo install` or modify system state.
+5. Plan and execute in one go — do not pause for confirmation.
 
-## Quick Reference
+## Scope Discipline
+- ONLY make changes described in the task. Do not refactor, reorganize, or improve unrelated code.
+- If `.task/TASK.md` has an **Anti-Goals** section, treat every item as a hard constraint — do NOT do those things.
+- If `.task/PLAN.md` exists, follow its steps exactly. Do not add extra steps.
+- Do not modify files outside the plan unless strictly required to complete a planned step.
+- A focused PR that does one thing well is better than a large PR that "also fixes" other things.
+- When in doubt about whether something is in scope, it isn't. Leave it alone.
 
-```bash
-cargo test -p apiari-codex-sdk
-cargo test -p apiari-codex-sdk -- --ignored  # Integration tests (requires live `codex` CLI)
-```
+## Task Artifacts
+If a `.task/` directory exists, read ALL files before writing any code:
+- `.task/TASK.md` — Task definition with scope, acceptance criteria, and anti-goals
+- `.task/CONTEXT.md` — Relevant codebase files and patterns
+- `.task/PLAN.md` — Step-by-step implementation plan (follow exactly)
+- `.task/PROGRESS.md` — Update this as you complete each step
 
-## Swarm Worker Rules
-
-1. **You are working in a git worktree.** Always create a new branch (`swarm/*`), never commit directly to `main`.
-2. **Only modify files within this repo (`codex-sdk/`).** Do not touch other repos in the workspace (e.g., `hive/`, `common/`, `swarm/`).
-3. **When done, create a PR:**
-   ```bash
-   gh pr create --repo ApiariTools/apiari-codex-sdk --title "..." --body "..."
-   ```
-4. **Do not run `cargo install` or modify system state.** No global installs, no modifying dotfiles, no system-level changes.
-5. **Plan+execute in one go without pausing.**
+**Do NOT commit `.task/` to git.** These are pipeline artifacts, not source code.
 
 ## Git Workflow
-
-- You are working in a swarm worktree on a `swarm/*` branch. Stay on this branch.
-- NEVER push to or merge into `main` directly.
-- NEVER run `git push origin main` or `git checkout main`.
-- When done, push your branch and open a PR. Swarm will handle merging.
-
-## Architecture
-
-```
-src/
-  lib.rs          # Module declarations + re-exports
-  client.rs       # CodexClient (factory) + Execution (read-only handle)
-  options.rs      # ExecOptions, ResumeOptions, SandboxMode, ApprovalPolicy
-  transport.rs    # ReadOnlyTransport (spawn, recv-only, interrupt, kill)
-  types.rs        # Event, Item variants, Usage, supporting types
-  error.rs        # SdkError enum + Result alias
-tests/
-  integration.rs  # Live CLI tests (#[ignore] by default)
-```
-
-## Protocol
-
-Spawns: `codex exec --json [opts...] <prompt>`
-
-**Unidirectional**: stdin is `/dev/null`. The SDK only reads JSONL events from stdout.
-No `send_message()` or `send_tool_result()` — codex handles tool execution internally.
-
-### Event Types (codex -> stdout)
-
-- `thread.started` — thread ID assigned
-- `turn.started` / `turn.completed` / `turn.failed` — turn lifecycle
-- `item.started` / `item.updated` / `item.completed` — item lifecycle
-- `token_count` — token usage statistics
-- `error` — execution error
-
-### Item Types
-
-- `agent_message` — model text response
-- `reasoning` — thinking/reasoning text
-- `command_execution` — shell command with output
-- `file_change` — file modifications
-- `mcp_tool_call` — MCP tool invocation
-- `web_search` — web search query
-- `todo_list` — task list
-- `error` — item-level error
-
-## Execution Model — Key Difference from Claude SDK
-
-**Claude SDK** is bidirectional: you send messages on stdin, receive events on stdout, and can interact mid-turn (send tool results, follow-up messages while the session is running).
-
-**Codex SDK** is single-shot: one prompt in, event stream out, then it's done. There is NO way to send input during an execution.
-
-### How "Chat" Works (Resume-as-Chat Pattern)
-
-To build a conversational UI on top of codex, each user message is a **separate execution** that resumes the previous session:
-
-```
-User message 1  →  exec("do the thing", ExecOptions { .. })
-                   ← stream events until EOF
-                   ← save thread_id from ThreadStarted event
-
-User message 2  →  exec_resume("now fix the tests", ResumeOptions { session_id, .. })
-                   ← stream events until EOF
-
-User message 3  →  exec_resume("looks good, commit it", ResumeOptions { session_id, .. })
-                   ← stream events until EOF
-```
-
-### UI Implications
-
-- **Input must be disabled while an execution is running.** You cannot queue or send messages mid-execution.
-- **interrupt() (SIGINT) can cancel** a running execution, but you can't redirect it — only stop it.
-- **Events stream in real-time** (`item.updated` gives incremental text) — the UI should render them live, not wait for completion.
-- **Hive integration** should abstract this behind `enum AgentBackend { Claude(..), Codex(..) }` at the coordinator level. The coordinator disables input for Codex backends while an execution is in flight, re-enables on EOF.
-
-## Design Rules
-
-- **Wrap CLI, not API.** This SDK spawns the `codex` binary. It does NOT call the OpenAI API directly.
-- **Forward-compatible parsing.** Unknown event/item types deserialize as `Unknown` variant. Fields use `#[serde(default)]` liberally.
-- **Async throughout.** All I/O uses tokio. Transport runs a background task to drain stderr.
-- **No apiari-common dependency.** This crate is standalone.
-
-## Error Handling
-
-`SdkError` variants:
-- `ProcessSpawn` — codex binary not found or failed to start
-- `ProcessDied { exit_code, stderr }` — subprocess exited unexpectedly
-- `InvalidJson` — NDJSON parse failure
-- `ProtocolError` — unexpected protocol state
-- `Timeout` — operation timed out
-- `Io` — underlying I/O error
-- `NotRunning` — execution already finished
+- Stay on your `swarm/*` branch
+- NEVER push to or merge into `main`
+- Commit early and often
+- Push your branch and open a PR when done
