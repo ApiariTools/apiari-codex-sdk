@@ -15,7 +15,7 @@ cargo test -p apiari-codex-sdk -- --ignored  # Integration tests (requires live 
 2. **Only modify files within this repo (`codex-sdk/`).** Do not touch other repos in the workspace (e.g., `hive/`, `common/`, `swarm/`).
 3. **When done, create a PR:**
    ```bash
-   gh pr create --repo ApiariTools/apiari-codex-sdk --title "..." --body "..."
+   gh pr create --repo ApiariTools/apiari-codex-sdk --reviewer @copilot --title "..." --body "..."
    ```
 4. **Do not run `cargo install` or modify system state.** No global installs, no modifying dotfiles, no system-level changes.
 5. **Plan+execute in one go without pausing.**
