@@ -3,7 +3,7 @@
 Rust SDK wrapping the OpenAI Codex CLI via JSONL stdout streaming.
 
 ## Rules
-1. You are working in a git worktree on a `swarm/*` branch. Never commit to main.
+1. You are working in a git worktree on a `swarm/*` branch. Never commit directly to `main`.
 2. Only modify files within this repository.
 3. Do not run `cargo install` or modify system state.
 
