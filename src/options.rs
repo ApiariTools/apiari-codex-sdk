@@ -130,10 +130,7 @@ impl ExecOptions {
             args.extend(["--sandbox".to_owned(), sandbox.as_str().to_owned()]);
         }
         if let Some(approval) = self.approval {
-            args.extend([
-                "--approval-policy".to_owned(),
-                approval.as_str().to_owned(),
-            ]);
+            args.extend(["--approval-policy".to_owned(), approval.as_str().to_owned()]);
         }
         if self.full_auto {
             args.push("--full-auto".to_owned());

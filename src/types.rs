@@ -377,8 +377,7 @@ mod tests {
 
     #[test]
     fn deserialize_turn_completed_with_usage() {
-        let json =
-            r#"{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}"#;
+        let json = r#"{"type":"turn.completed","usage":{"input_tokens":100,"output_tokens":50}}"#;
         let event: Event = serde_json::from_str(json).unwrap();
         match event {
             Event::TurnCompleted {
@@ -403,7 +402,8 @@ mod tests {
 
     #[test]
     fn deserialize_turn_failed() {
-        let json = r#"{"type":"turn.failed","error":{"message":"rate limited","code":"rate_limit"}}"#;
+        let json =
+            r#"{"type":"turn.failed","error":{"message":"rate limited","code":"rate_limit"}}"#;
         let event: Event = serde_json::from_str(json).unwrap();
         match event {
             Event::TurnFailed {
@@ -434,8 +434,7 @@ mod tests {
 
     #[test]
     fn deserialize_item_reasoning() {
-        let json =
-            r#"{"type":"item.started","item":{"type":"reasoning","id":"r_1","text":"Let me think..."}}"#;
+        let json = r#"{"type":"item.started","item":{"type":"reasoning","id":"r_1","text":"Let me think..."}}"#;
         let event: Event = serde_json::from_str(json).unwrap();
         match event {
             Event::ItemStarted {
@@ -478,9 +477,12 @@ mod tests {
         let event: Event = serde_json::from_str(json).unwrap();
         match event {
             Event::ItemCompleted {
-                item: Item::FileChange {
-                    id, changes, status,
-                },
+                item:
+                    Item::FileChange {
+                        id,
+                        changes,
+                        status,
+                    },
             } => {
                 assert_eq!(id.as_deref(), Some("fc_1"));
                 assert_eq!(changes.len(), 1);
