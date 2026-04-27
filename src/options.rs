@@ -156,12 +156,12 @@ impl ExecOptions {
 }
 
 impl ResumeOptions {
-    /// Convert these options into CLI arguments for the `codex` binary.
+    /// Convert these options into CLI arguments for `codex exec resume`.
     pub fn to_cli_args(&self) -> Vec<String> {
         let mut args = Vec::new();
 
         if let Some(ref id) = self.session_id {
-            args.extend(["--resume".to_owned(), id.clone()]);
+            args.push(id.clone());
         }
         if self.last {
             args.push("--last".to_owned());
@@ -244,10 +244,7 @@ mod tests {
             ..Default::default()
         };
         let args = opts.to_cli_args();
-        assert_eq!(
-            args,
-            vec!["--resume", "sess_123", "-m", "o4-mini", "--full-auto"]
-        );
+        assert_eq!(args, vec!["sess_123", "-m", "o4-mini", "--full-auto"]);
     }
 
     #[test]

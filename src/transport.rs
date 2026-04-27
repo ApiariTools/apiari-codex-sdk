@@ -25,7 +25,8 @@ pub struct ReadOnlyTransport {
 impl ReadOnlyTransport {
     /// Spawn a new `codex` process.
     ///
-    /// The process is launched as `<cli_path> <subcommand> --json [extra_args...] [prompt]`.
+    /// The process is launched as
+    /// `<cli_path> <subcommand_parts...> --json [extra_args...] [prompt]`.
     /// Stdin is `/dev/null` — there is no send method.
     ///
     /// # Errors
@@ -33,7 +34,7 @@ impl ReadOnlyTransport {
     /// Returns [`SdkError::ProcessSpawn`] if the process cannot be started.
     pub fn spawn(
         cli_path: &str,
-        subcommand: &str,
+        subcommand_parts: &[&str],
         extra_args: &[String],
         prompt: Option<&str>,
         working_dir: Option<&std::path::Path>,
@@ -41,11 +42,12 @@ impl ReadOnlyTransport {
     ) -> Result<Self> {
         let mut cmd = Command::new(cli_path);
 
-        // Subcommand (e.g. "exec").
-        cmd.arg(subcommand);
+        // Subcommand path (e.g. ["exec"] or ["exec", "resume"]).
+        cmd.args(subcommand_parts);
 
         // Always request JSON output.
         cmd.arg("--json");
+        cmd.arg("--skip-git-repo-check");
 
         // Caller-supplied arguments (model, sandbox, etc.).
         cmd.args(extra_args);

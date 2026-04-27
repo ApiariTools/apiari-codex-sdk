@@ -27,7 +27,7 @@
 //! # }
 //! ```
 
-use crate::error::Result;
+use crate::error::{Result, SdkError};
 use crate::options::{ExecOptions, ResumeOptions};
 use crate::transport::ReadOnlyTransport;
 use crate::types::Event;
@@ -76,7 +76,7 @@ impl CodexClient {
         let args = opts.to_cli_args();
         let transport = ReadOnlyTransport::spawn(
             &self.cli_path,
-            "exec",
+            &["exec"],
             &args,
             Some(prompt),
             opts.working_dir.as_deref(),
@@ -100,7 +100,7 @@ impl CodexClient {
         let args = opts.to_cli_args();
         let transport = ReadOnlyTransport::spawn(
             &self.cli_path,
-            "exec",
+            &["exec", "resume"],
             &args,
             Some(prompt),
             opts.working_dir.as_deref(),
@@ -143,8 +143,14 @@ impl Execution {
             let value = self.transport.recv().await?;
 
             let Some(value) = value else {
-                // EOF — process exited.
                 self.finished = true;
+                let (exit_code, stderr) = self.transport.wait_with_stderr().await?;
+                if exit_code.unwrap_or(0) != 0 {
+                    return Err(SdkError::ProcessDied {
+                        exit_code,
+                        stderr: stderr.unwrap_or_default(),
+                    });
+                }
                 return Ok(None);
             };
 
